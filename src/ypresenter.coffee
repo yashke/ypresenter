@@ -1,8 +1,10 @@
 class SlideShowUseCase
-  constructor: (@presentation, @view) ->
+  constructor: (@presentation, @view, @notesView) ->
 
   enterPresentation: =>
     @slideIndex = 1
+    @notesView.enterPresentation()
+    @showSlide()
 
   nextSlide: =>
     if @slideIndex < @presentation.slidesCount()
@@ -16,6 +18,7 @@ class SlideShowUseCase
 
   showSlide: =>
     @view.showSlide(@slideIndex)
+    @notesView.showSlide(@slideIndex)
 
 class Presentation
   constructor: (@parent) ->
@@ -45,12 +48,47 @@ class MainSlideShowView
     for slide in @presentation.getSlidesWithout(index)
       slide.hide()
 
+  bind: (@keyboardController) =>
+
+  wireEvents: (callback) =>
+    $(window.document).keydown (e) =>
+      @keyDown(e)
+
+  keyDown: (e) =>
+    if @keyboardController?
+      @keyboardController.keyDown(e)
+
+class NotesView
+  constructor: (@presentation) ->
+
+  enterPresentation: =>
+    notesWindow = window.open(null, "presentation_notes")
+    @notesDocument = $(notesWindow.document)
+    @notesBody = @notesDocument.find("body")
+    @notesBody.html("<h1>Notes</h1>")
+    @notesBody.append("<article></article>")
+    @notesRoot = $(@notesBody.find("article"))
+    @wireEvents()
+
+  showSlide: (index) =>
+    index = index - 1
+    @notesRoot.html(@presentation.getSlide(index).find("details").html())
+
+  bind: (@keyboardController) =>
+
+  wireEvents: =>
+    @notesDocument.keydown (e) =>
+      @keyDown(e)
+
+  keyDown: (e) =>
+    if @keyboardController?
+      @keyboardController.keyDown(e)
+
 class KeyboardController
   constructor: (@slideShowUseCase) ->
 
-  wireEvents: =>
-    $(document).keydown (e) =>
-      @handleEvent(e)
+  keyDown: (e) =>
+    @handleEvent(e)
 
   handleEvent: (event) =>
     switch event.keyCode
@@ -67,12 +105,15 @@ class YPresenter
   setup: =>
     @presentation = new Presentation($("body"))
     @mainSlideShowView = new MainSlideShowView(@presentation)
-    @slideShowUsecase = new SlideShowUseCase(@presentation, @mainSlideShowView)
-    @keyboardController = new KeyboardController(@slideShowUsecase)
-    @keyboardController.wireEvents()
+    @mainSlideShowView.wireEvents()
+    @notesView = new NotesView(@presentation)
+    @slideShowUseCase = new SlideShowUseCase(@presentation, @mainSlideShowView, @notesView)
+    @keyboardController = new KeyboardController(@slideShowUseCase)
+    @mainSlideShowView.bind(@keyboardController)
+    @notesView.bind(@keyboardController)
 
   start: =>
-    @slideShowUsecase.enterPresentation()
+    @slideShowUseCase.enterPresentation()
 
 $ ->
   app = new YPresenter()
